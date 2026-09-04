@@ -1,4 +1,4 @@
-const CACHE = "emberpage-v1";
+const CACHE = "emberpage-v2";
 const ASSETS = [
   "./",
   "./index.html",
