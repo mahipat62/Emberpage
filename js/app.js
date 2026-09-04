@@ -161,6 +161,12 @@ const flipZonePrev = document.getElementById("flipZonePrev");
 const flipZoneNext = document.getElementById("flipZoneNext");
 const flipPageNum = document.getElementById("flipPageNum");
 
+const libraryToggle = document.getElementById("libraryToggle");
+const libraryView = document.getElementById("libraryView");
+const libraryGrid = document.getElementById("libraryGrid");
+const libraryTag = document.getElementById("libraryTag");
+const libraryCloseBtn = document.getElementById("libraryCloseBtn");
+
 /* ---------------- utils ---------------- */
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -227,7 +233,7 @@ function updateStorageMeter() {
     navigator.storage.estimate().then((est) => {
       const mb = (est.usage / 1048576).toFixed(1);
       const totalCh = chapters.length.toLocaleString();
-      storageMeter.textContent = `${totalCh} chapters · ${mb} MB on this device`;
+      storageMeter.textContent = `${totalCh} chapters \u00B7 ${mb} MB on this device`;
     }).catch(() => {});
   } else {
     storageMeter.textContent = `${chapters.length.toLocaleString()} chapters`;
@@ -415,8 +421,8 @@ function updateNav() {
   const sibs = siblings(ch);
   const idx = sibs.findIndex((c) => c.id === currentId);
   if (settings.readMode === "flip") {
-    prevBtn.disabled = idx <= 0 && flipState.currentPage <= 0;
-    nextBtn.disabled = idx < 0 || (idx >= sibs.length - 1 && flipState.currentPage >= flipState.totalPages - 1);
+    prevBtn.disabled = idx <= 0 && flipState.currentSpread <= 0;
+    nextBtn.disabled = idx < 0 || (idx >= sibs.length - 1 && flipState.currentSpread >= flipState.totalSpreads - 1);
   } else {
     prevBtn.disabled = idx <= 0;
     nextBtn.disabled = idx < 0 || idx >= sibs.length - 1;
@@ -436,11 +442,14 @@ function onReaderScroll() {
 readerScroll.addEventListener("scroll", onReaderScroll, { passive: true });
 
 /* ---------------- reader rendering: flip / book mode ---------------- */
-const flipState = { totalPages: 0, currentPage: 0, pageW: 0, landLast: false };
+const flipState = { pagesPerView: 1, pageW: 0, gutter: 0, colStride: 0, spreadStride: 0, totalPages: 0, totalSpreads: 0, currentSpread: 0 };
 const flipWindow = document.createElement("div");
 flipWindow.id = "flipWindow";
 flipTrack.parentNode.insertBefore(flipWindow, flipTrack);
 flipWindow.appendChild(flipTrack);
+const flipSpine = document.createElement("div");
+flipSpine.id = "flipSpine";
+flipWindow.appendChild(flipSpine);
 
 function renderFlipChapter(ch, text, landLast) {
   const sibs = siblings(ch);
@@ -448,50 +457,74 @@ function renderFlipChapter(ch, text, landLast) {
   const book = ch.bookId ? books.find((b) => b.id === ch.bookId) : null;
   const eyebrow = (book ? esc(book.title) + " &middot; " : "") + "Chapter " + (idx + 1) + " of " + sibs.length;
   flipTrack.innerHTML =
+    '<div class="flip-page-pad">' +
     `<div class="flip-chap-head"><p class="chapter-eyebrow">${eyebrow}</p><h1>${esc(ch.title)}</h1></div>` +
-    paragraphsHtml(text);
+    paragraphsHtml(text) +
+    "</div>";
   requestAnimationFrame(() => {
-    layoutFlip();
-    if (landLast) goToFlipPage(flipState.totalPages - 1, true);
-    else goToFlipPage(Math.round((ch.pagePct || 0) * (flipState.totalPages - 1)), true);
+    layoutFlip(false, landLast ? "last" : (ch.pagePct || 0));
     updateNav();
   });
 }
 let flipLayoutTimer;
-function layoutFlip(keepPage) {
+function layoutFlip(keepSpread, landAt) {
   const rect = flipStage.getBoundingClientRect();
   if (rect.width < 10) return;
-  const sidePad = isMobile() ? 18 : 40;
-  const pageW = Math.max(260, Math.min(rect.width - sidePad * 2, 760));
+  const sidePad = isMobile() ? 16 : 44;
+  const availW = rect.width - sidePad * 2;
+  const pagesPerView = availW >= 900 ? 2 : 1;
+  const gutter = pagesPerView === 2 ? 30 : 0;
+  let pageW = pagesPerView === 2 ? Math.floor((Math.min(availW, 1360) - gutter) / 2) : Math.min(availW, 720);
+  pageW = Math.max(240, pageW);
   const pageH = rect.height - 44;
-  flipWindow.style.width = pageW + "px";
-  flipWindow.style.height = pageH + "px";
-  flipTrack.style.columnWidth = pageW + "px";
-  flipTrack.style.height = pageH + "px";
-  const prevPct = flipState.totalPages > 1 ? flipState.currentPage / (flipState.totalPages - 1) : 0;
+
+  const prevSpreadPct = flipState.totalSpreads > 1 ? flipState.currentSpread / (flipState.totalSpreads - 1) : 0;
+
+  flipState.pagesPerView = pagesPerView;
   flipState.pageW = pageW;
-  flipState.totalPages = Math.max(1, Math.round(flipTrack.scrollWidth / pageW));
-  const target = keepPage ? Math.round(prevPct * (flipState.totalPages - 1)) : flipState.currentPage;
-  goToFlipPage(target, true);
+  flipState.gutter = gutter;
+  flipState.colStride = pageW + gutter;
+  flipState.spreadStride = pagesPerView * flipState.colStride;
+
+  flipWindow.style.width = (pagesPerView * pageW + (pagesPerView - 1) * gutter) + "px";
+  flipWindow.style.height = pageH + "px";
+  flipSpine.style.display = pagesPerView === 2 ? "block" : "none";
+  flipTrack.style.columnWidth = pageW + "px";
+  flipTrack.style.columnGap = gutter + "px";
+  flipTrack.style.height = pageH + "px";
+
+  flipState.totalPages = Math.max(1, Math.round((flipTrack.scrollWidth + gutter) / flipState.colStride));
+  flipState.totalSpreads = Math.max(1, Math.ceil(flipState.totalPages / pagesPerView));
+
+  let target;
+  if (landAt === "last") target = flipState.totalSpreads - 1;
+  else if (typeof landAt === "number") target = Math.round(landAt * (flipState.totalSpreads - 1));
+  else target = keepSpread ? Math.round(prevSpreadPct * (flipState.totalSpreads - 1)) : flipState.currentSpread;
+  goToFlipSpread(target, true);
 }
 window.addEventListener("resize", () => {
   if (settings.readMode !== "flip" || flipStage.hidden) return;
   clearTimeout(flipLayoutTimer);
   flipLayoutTimer = setTimeout(() => layoutFlip(true), 150);
 });
-function goToFlipPage(n, instant) {
-  flipState.currentPage = Math.max(0, Math.min(flipState.totalPages - 1, n || 0));
-  const x = -flipState.currentPage * flipState.pageW;
+function goToFlipSpread(n, instant) {
+  flipState.currentSpread = Math.max(0, Math.min(flipState.totalSpreads - 1, n || 0));
+  const x = -flipState.currentSpread * flipState.spreadStride;
   if (instant) {
     flipTrack.style.transition = "none";
     flipTrack.style.transform = `translateX(${x}px)`;
     void flipTrack.offsetWidth;
     flipTrack.style.transition = "";
   } else {
+    flipWindow.classList.add("turning");
     flipTrack.style.transform = `translateX(${x}px)`;
+    setTimeout(() => flipWindow.classList.remove("turning"), 420);
   }
-  flipPageNum.textContent = `Page ${flipState.currentPage + 1} of ${flipState.totalPages}`;
-  const pct = flipState.totalPages > 1 ? flipState.currentPage / (flipState.totalPages - 1) : 0;
+  const firstPage = flipState.currentSpread * flipState.pagesPerView;
+  flipPageNum.textContent = flipState.pagesPerView === 2
+    ? `Pages ${firstPage + 1}–${Math.min(firstPage + 2, flipState.totalPages)} of ${flipState.totalPages}`
+    : `Page ${firstPage + 1} of ${flipState.totalPages}`;
+  const pct = flipState.totalSpreads > 1 ? flipState.currentSpread / (flipState.totalSpreads - 1) : 0;
   progressFill.style.width = (pct * 100).toFixed(2) + "%";
   clearTimeout(scrollSaveTimer);
   scrollSaveTimer = setTimeout(() => {
@@ -501,11 +534,11 @@ function goToFlipPage(n, instant) {
   updateNav();
 }
 function nextFlipPage() {
-  if (flipState.currentPage < flipState.totalPages - 1) { goToFlipPage(flipState.currentPage + 1); return; }
+  if (flipState.currentSpread < flipState.totalSpreads - 1) { goToFlipSpread(flipState.currentSpread + 1); return; }
   goRelative(1);
 }
 function prevFlipPage() {
-  if (flipState.currentPage > 0) { goToFlipPage(flipState.currentPage - 1); return; }
+  if (flipState.currentSpread > 0) { goToFlipSpread(flipState.currentSpread - 1); return; }
   goRelative(-1, true);
 }
 flipZoneNext.addEventListener("click", nextFlipPage);
@@ -520,6 +553,111 @@ flipStage.addEventListener("touchend", (e) => {
   if (dx < 0) nextFlipPage(); else prevFlipPage();
 }, { passive: true });
 
+/* ---------------- library / home view ---------------- */
+function bookProgress(book) {
+  const items = chapters.filter((c) => c.bookId === book.id);
+  const total = items.length;
+  if (!total) return { total: 0, readCount: 0, pct: 0 };
+  const readCount = book.furthestSeq == null ? 0 : items.filter((c) => c.seq <= book.furthestSeq).length;
+  return { total, readCount, pct: Math.round((readCount / total) * 100) };
+}
+function openLibrary() {
+  libraryView.hidden = false;
+  readerScroll.hidden = true;
+  flipStage.hidden = true;
+  progressFill.style.width = "0%";
+  renderLibrary();
+}
+function closeLibrary() {
+  libraryView.hidden = true;
+  if (chapters.some((c) => c.id === currentId)) applyReadMode();
+  else { readerScroll.hidden = false; flipStage.hidden = true; renderEmptyMain(); }
+}
+libraryToggle.addEventListener("click", () => { libraryView.hidden ? openLibrary() : closeLibrary(); });
+libraryCloseBtn.addEventListener("click", closeLibrary);
+
+function renderLibrary() {
+  const n = books.length;
+  const dot = "\u00B7";
+  libraryTag.textContent = n ? `${n} ${n === 1 ? "shelf" : "shelves"} ${dot} ${chapters.length.toLocaleString()} chapters total` : "Nothing here yet";
+  let html = "";
+  books.slice().sort((a, b) => (b.lastOpenedRank || 0) - (a.lastOpenedRank || 0) || a.title.localeCompare(b.title)).forEach((book) => {
+    const prog = bookProgress(book);
+    const statusText = prog.total === 0 ? "No chapters" : prog.readCount === 0 ? `${prog.total} chapters &middot; not started` : `Chapter ${prog.readCount} of ${prog.total} &middot; ${prog.pct}% read`;
+    html += `<div class="book-card" data-book-id="${esc(book.id)}" tabindex="0" role="button" aria-label="Open ${esc(book.title)}">` +
+      `<span class="book-card-actions">` +
+        `<button class="mini-btn" data-action="rename" data-book-id="${esc(book.id)}" title="Rename"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>` +
+        `<button class="mini-btn" data-action="delete" data-book-id="${esc(book.id)}" title="Delete this shelf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>` +
+      `</span>` +
+      `<div class="book-card-title">${esc(book.title)}</div>` +
+      `<div class="book-card-status">${statusText}</div>` +
+      `<div class="book-card-progress"><div class="fill" style="width:${prog.pct}%"></div></div>` +
+      `<div class="book-card-foot"><span>${prog.pct}%</span></div>` +
+    `</div>`;
+  });
+  html += '<div class="book-card add-card" id="libraryAddCard" tabindex="0" role="button" aria-label="Add a book">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>' +
+    '<span>Add a chapter or import an EPUB</span>' +
+  '</div>';
+  libraryGrid.innerHTML = html;
+  const addCard = document.getElementById("libraryAddCard");
+  addCard.addEventListener("click", () => epubFileInput.click());
+}
+const libraryDeleteArm = {};
+libraryGrid.addEventListener("click", (e) => {
+  const actionBtn = e.target.closest("[data-action]");
+  if (actionBtn) {
+    e.stopPropagation();
+    const bookId = actionBtn.dataset.bookId;
+    const action = actionBtn.dataset.action;
+    if (action === "rename") {
+      const book = books.find((b) => b.id === bookId);
+      const val = prompt("Rename shelf", book ? book.title : "");
+      if (val && val.trim() && book) { book.title = val.trim(); putOne("books", book).then(() => { renderLibrary(); renderSidebar(); }); }
+      return;
+    }
+    if (action === "delete") {
+      if (libraryDeleteArm[bookId]) {
+        clearTimeout(libraryDeleteArm[bookId]);
+        delete libraryDeleteArm[bookId];
+        deleteBookCascade(bookId).then(() => {
+          const removedIds = chapters.filter((c) => c.bookId === bookId).map((c) => c.id);
+          chapters = chapters.filter((c) => c.bookId !== bookId);
+          books = books.filter((b) => b.id !== bookId);
+          if (removedIds.indexOf(currentId) !== -1) {
+            currentId = null;
+            saveJSON(LS_CURRENT, null);
+            if (chapters.length) openChapter(chapters[0].id).then(() => { libraryView.hidden = false; renderLibrary(); });
+            else { renderEmptyMain(); updateNav(); }
+          }
+          renderLibrary(); renderSidebar();
+          showToast("Shelf deleted.");
+        });
+      } else {
+        actionBtn.classList.add("danger-arm");
+        actionBtn.title = "Click again to delete the whole shelf";
+        libraryDeleteArm[bookId] = setTimeout(() => { actionBtn.classList.remove("danger-arm"); actionBtn.title = "Delete this shelf"; delete libraryDeleteArm[bookId]; }, 3000);
+      }
+      return;
+    }
+  }
+  const card = e.target.closest(".book-card:not(.add-card)");
+  if (!card) return;
+  const bookId = card.dataset.bookId;
+  const book = books.find((b) => b.id === bookId);
+  if (!book) return;
+  const sibs = chapters.filter((c) => c.bookId === bookId).sort((a, z) => a.seq - z.seq);
+  const target = (book.lastReadChapterId && sibs.some((c) => c.id === book.lastReadChapterId)) ? book.lastReadChapterId : (sibs[0] && sibs[0].id);
+  if (target) openChapter(target);
+});
+libraryGrid.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const card = e.target.closest(".book-card");
+  if (!card) return;
+  e.preventDefault();
+  card.click();
+});
+
 /* ---------------- open / navigate chapters ---------------- */
 function openChapter(id, landLastPage) {
   const ch = chapters.find((c) => c.id === id);
@@ -530,6 +668,16 @@ function openChapter(id, landLastPage) {
   }
   currentId = id;
   saveJSON(LS_CURRENT, currentId);
+  closeLibrary();
+  if (ch.bookId) {
+    const book = books.find((b) => b.id === ch.bookId);
+    if (book) {
+      let changed = false;
+      if (book.lastReadChapterId !== ch.id) { book.lastReadChapterId = ch.id; changed = true; }
+      if (book.furthestSeq == null || ch.seq > book.furthestSeq) { book.furthestSeq = ch.seq; changed = true; }
+      if (changed) putOne("books", book);
+    }
+  }
   const token = ++openToken;
   return getOne("chapterText", id).then((rec) => {
     if (token !== openToken) return;
@@ -776,6 +924,8 @@ function getDcText(opfDoc, tag) {
   const n = nodes.find((x) => x.localName === tag);
   return n && n.textContent ? n.textContent.trim() : "";
 }
+const FRONT_MATTER_RE = /^(cover|title\s*page|half\s*title|copyright|imprint|colophon|table\s*of\s*contents|contents|toc|index|acknowledge?ments?|dedication|also\s*by|about\s*the\s*author|epigraph|praise\s*for)$/i;
+
 function parseEpubFile(file, onProgress) {
   return JSZip.loadAsync(file).then((zip) => {
     const containerFile = zip.file("META-INF/container.xml");
@@ -800,15 +950,23 @@ function parseEpubFile(file, onProgress) {
         });
         const manifest = {};
         Array.prototype.slice.call(opfDoc.querySelectorAll("manifest > item")).forEach((item) => {
-          manifest[item.getAttribute("id")] = { href: item.getAttribute("href"), type: item.getAttribute("media-type") || "" };
+          manifest[item.getAttribute("id")] = {
+            href: item.getAttribute("href"),
+            type: item.getAttribute("media-type") || "",
+            properties: item.getAttribute("properties") || "",
+          };
         });
-        const spineIds = Array.prototype.slice.call(opfDoc.querySelectorAll("spine > itemref")).map((el) => el.getAttribute("idref"));
+        const spineEntries = Array.prototype.slice.call(opfDoc.querySelectorAll("spine > itemref")).map((el) => ({
+          id: el.getAttribute("idref"),
+          linear: el.getAttribute("linear"),
+        }));
         const items = [];
         let chain = Promise.resolve();
-        spineIds.forEach((id) => {
+        spineEntries.forEach((entry) => {
           chain = chain.then(() => {
-            const m = manifest[id];
+            const m = manifest[entry.id];
             if (!m || !/html/i.test(m.type)) return;
+            if (/\bnav\b/.test(m.properties)) return; // EPUB3 nav document - pure navigation, never real content
             const href = decodeURIComponent(m.href);
             const path = opfDir ? opfDir + "/" + href : href;
             const zf = zip.file(path) || zip.file(href);
@@ -822,7 +980,13 @@ function parseEpubFile(file, onProgress) {
               const text = textOfDoc(doc);
               const words = wordsOf(text);
               if (!text) return;
-              items.push({ title: secTitle || ("Section " + (items.length + 1)), text, words, include: words >= 80 });
+              const isFrontMatter = FRONT_MATTER_RE.test(secTitle.trim());
+              const isNonLinear = entry.linear === "no";
+              items.push({
+                title: secTitle || ("Section " + (items.length + 1)),
+                text, words,
+                include: words >= 80 && !isFrontMatter && !isNonLinear,
+              });
               if (onProgress && items.length % 12 === 0) onProgress(items.length);
             });
           });
@@ -888,8 +1052,8 @@ function runEpubImportFlow(files) {
   let chain = Promise.resolve();
   files.forEach((file, fi) => {
     chain = chain.then(() => {
-      progText.textContent = `Reading ${file.name} (${fi + 1} of ${files.length})…`;
-      return parseEpubFile(file, (n) => { progText.textContent = `Reading ${file.name} (${fi + 1} of ${files.length}) — ${n} sections found…`; })
+      progText.textContent = `Reading ${file.name} (${fi + 1} of ${files.length})\u2026`;
+      return parseEpubFile(file, (n) => { progText.textContent = `Reading ${file.name} (${fi + 1} of ${files.length}) \u2014 ${n} sections found\u2026`; })
         .then((r) => { parsed.push(r); })
         .catch((err) => { console.error(err); showToast(`Skipped ${file.name} - couldn't read it as an EPUB.`, true); });
     });
