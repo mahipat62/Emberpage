@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Emberpage</title>
+<meta name="description" content="A personal offline reading app for chapters and EPUBs you bring yourself.">
+<meta name="theme-color" content="#0A0A0C">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Emberpage">
+<link rel="stylesheet" href="fonts/fonts-local.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div id="app" class="sidebar-open">
+  <div id="backdrop"></div>
+
+  <button id="sidebarToggle" type="button" aria-label="Toggle chapter library" title="Toggle library">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+  </button>
+
+  <aside id="sidebar" aria-label="Chapter library">
+    <div class="sidebar-head">
+      <div class="brand">
+        <div class="brand-row">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c1.7 3 4.2 4.6 4.2 8.4A4.2 4.2 0 1 1 7.9 11c-.1 1 .2 1.9.8 2.7a3.1 3.1 0 0 0 5.9-1.3c0-2.6-1.9-4.2-2.6-9.4z"/></svg>
+          <span class="brand-name">Emberpage</span>
+        </div>
+        <span class="brand-tag">your reading nook</span>
+      </div>
+      <div class="sidebar-head-actions">
+        <button id="importEpubBtn" class="icon-btn" type="button" title="Import EPUB file(s)" aria-label="Import EPUB file(s)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+        </button>
+        <input id="epubFileInput" type="file" accept=".epub,application/epub+zip" multiple hidden>
+        <button id="addChapterBtn" class="icon-btn accent" type="button" title="Add a chapter (N)" aria-label="Add a chapter">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="chapterList" class="chapter-list"><div class="sidebar-loading">Opening your library&hellip;</div></div>
+    <div class="sidebar-foot" id="storageMeter"></div>
+  </aside>
+
+  <main id="reader">
+    <div id="progressTrack"><div id="progressFill"></div></div>
+
+    <div id="readerScroll">
+      <div id="readerInner"></div>
+    </div>
+
+    <div id="flipStage" hidden>
+      <div id="flipTrack"></div>
+      <button id="flipZonePrev" class="flip-zone left" type="button" aria-label="Previous page"></button>
+      <button id="flipZoneNext" class="flip-zone right" type="button" aria-label="Next page"></button>
+      <div id="flipPageNum"></div>
+    </div>
+  </main>
+
+  <nav id="dock" aria-label="Reading controls">
+    <div class="dock-group">
+      <button class="dock-btn" id="prevBtn" type="button" title="Previous (&larr;)" aria-label="Previous">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <button class="dock-btn" id="nextBtn" type="button" title="Next (&rarr;)" aria-label="Next">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+    <div class="dock-sep"></div>
+    <div class="dock-group" id="themeGroup">
+      <button class="swatch" data-theme="paper" title="Paper (light)" aria-label="Paper theme" style="background:#EDEEF1;"><span style="width:9px;height:9px;border-radius:50%;background:#C2721F;"></span></button>
+      <button class="swatch" data-theme="sepia" title="Sepia (reading)" aria-label="Sepia theme" style="background:#E9D8B3;"><span style="width:9px;height:9px;border-radius:50%;background:#AD531B;"></span></button>
+      <button class="swatch" data-theme="dusk" title="Dusk (soft dark)" aria-label="Dusk theme" style="background:#201E27;"><span style="width:9px;height:9px;border-radius:50%;background:#DD9350;"></span></button>
+      <button class="swatch" data-theme="midnight" title="Midnight (true black)" aria-label="Midnight theme" style="background:#000;"><span style="width:9px;height:9px;border-radius:50%;background:#E2934C;"></span></button>
+    </div>
+    <div class="dock-sep"></div>
+    <div class="dock-group">
+      <button class="dock-btn letters" id="fontSerifBtn" type="button" title="Serif reading font" aria-label="Serif font">Aa</button>
+      <button class="dock-btn letters alt" id="fontSansBtn" type="button" title="Sans reading font" aria-label="Sans font">Aa</button>
+    </div>
+    <div class="dock-sep"></div>
+    <div class="dock-group">
+      <button class="dock-btn" id="sizeMinus" type="button" title="Smaller text" aria-label="Decrease text size">&minus;</button>
+      <span class="stepper-val" id="sizeVal">19</span>
+      <button class="dock-btn" id="sizePlus" type="button" title="Larger text" aria-label="Increase text size">+</button>
+    </div>
+    <div class="dock-sep"></div>
+    <div class="dock-group">
+      <button class="dock-btn" id="leadMinus" type="button" title="Tighter line spacing" aria-label="Decrease line spacing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <button class="dock-btn" id="leadPlus" type="button" title="Looser line spacing" aria-label="Increase line spacing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+      </button>
+    </div>
+    <div class="dock-sep"></div>
+    <div class="dock-group">
+      <button class="dock-btn" id="widthMinus" type="button" title="Narrower column" aria-label="Decrease column width">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 4v16M15 4v16"/></svg>
+      </button>
+      <button class="dock-btn" id="widthPlus" type="button" title="Wider column" aria-label="Increase column width">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 4v16M19 4v16"/></svg>
+      </button>
+    </div>
+    <div class="dock-sep"></div>
+    <div class="dock-group">
+      <button class="dock-btn" id="modeBtn" type="button" title="Switch between scroll and book mode" aria-label="Toggle book mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6c-2-1.5-5-2-8-1v13c3-1 6-.5 8 1 2-1.5 5-2 8-1V5c-3-1-6-.5-8 1z"/><path d="M12 6v13"/></svg>
+      </button>
+      <button class="dock-btn" id="focusBtn" type="button" title="Focus mode (F)" aria-label="Toggle focus mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+  </nav>
+</div>
+
+<div id="modalOverlay" hidden>
+  <div id="modalCard" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <h2 id="modalTitle">Add a chapter</h2>
+    <div class="field">
+      <label class="field-label" for="chapterTitleInput">Title</label>
+      <input id="chapterTitleInput" type="text" placeholder="e.g. Chapter 19 &mdash; the title of what you're pasting" autocomplete="off">
+    </div>
+    <div class="field">
+      <label class="field-label" for="chapterBookInput">Book <span class="field-hint">(optional &mdash; groups chapters into a shelf)</span></label>
+      <input id="chapterBookInput" type="text" placeholder="e.g. Shadow Slave" autocomplete="off" list="bookDatalist">
+      <datalist id="bookDatalist"></datalist>
+    </div>
+    <div class="field" style="flex:1;">
+      <label class="field-label" for="chapterTextInput">Text</label>
+      <textarea id="chapterTextInput" placeholder="Paste the chapter text you're reading here..."></textarea>
+    </div>
+    <div class="modal-meta">
+      <span id="modalWordCount">0 words</span>
+      <span id="modalHint">Esc to cancel</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="modalCancel" type="button">Cancel</button>
+      <button class="btn accent" id="modalSave" type="button">Save chapter</button>
+    </div>
+  </div>
+</div>
+
+<div id="epubOverlay" hidden>
+  <div id="epubCard" role="dialog" aria-modal="true" aria-labelledby="epubModalTitle">
+    <h2 id="epubModalTitle">Import EPUB</h2>
+    <div id="epubBody"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="epubCancel" type="button">Cancel</button>
+      <button class="btn accent" id="epubImportBtn" type="button" disabled>Import selected</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastHost"></div>
+
+<script src="vendor/jszip.min.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
