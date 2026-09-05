@@ -473,8 +473,11 @@ function layoutFlip(keepSpread, landAt) {
   const sidePad = isMobile() ? 16 : 44;
   const availW = rect.width - sidePad * 2;
   const pagesPerView = availW >= 900 ? 2 : 1;
-  const gutter = pagesPerView === 2 ? 30 : 0;
-  let pageW = pagesPerView === 2 ? Math.floor((Math.min(availW, 1360) - gutter) / 2) : Math.min(availW, 720);
+  // No column gap: pages sit flush so the spine pivot for the page-turn lands
+  // exactly on the page edge. The visual spine gap comes from .flip-page-pad
+  // padding plus the #flipSpine shadow.
+  const gutter = 0;
+  let pageW = pagesPerView === 2 ? Math.floor(Math.min(availW, 1360) / 2) : Math.min(availW, 720);
   pageW = Math.max(240, pageW);
   const pageH = rect.height - 44;
 
@@ -482,11 +485,12 @@ function layoutFlip(keepSpread, landAt) {
 
   flipState.pagesPerView = pagesPerView;
   flipState.pageW = pageW;
+  flipState.pageH = pageH;
   flipState.gutter = gutter;
   flipState.colStride = pageW + gutter;
   flipState.spreadStride = pagesPerView * flipState.colStride;
 
-  flipWindow.style.width = (pagesPerView * pageW + (pagesPerView - 1) * gutter) + "px";
+  flipWindow.style.width = (pagesPerView * pageW) + "px";
   flipWindow.style.height = pageH + "px";
   flipSpine.style.display = pagesPerView === 2 ? "block" : "none";
   flipTrack.style.columnWidth = pageW + "px";
@@ -533,12 +537,97 @@ function goToFlipSpread(n, instant) {
   }, 400);
   updateNav();
 }
+/* ---- page-turn animation: a leaf that rotates around the spine ---- */
+const FLIP_MS = 620;
+const flipLeaf = document.createElement("div");
+flipLeaf.id = "flipLeaf";
+flipLeaf.innerHTML =
+  '<div class="leaf-face leaf-front"><div class="leaf-inner"></div><div class="leaf-shade"></div></div>' +
+  '<div class="leaf-face leaf-back"><div class="leaf-inner"></div><div class="leaf-shade"></div></div>';
+flipStage.appendChild(flipLeaf);
+const leafFrontInner = flipLeaf.querySelector(".leaf-front .leaf-inner");
+const leafBackInner = flipLeaf.querySelector(".leaf-back .leaf-inner");
+const leafFrontShade = flipLeaf.querySelector(".leaf-front .leaf-shade");
+const leafBackShade = flipLeaf.querySelector(".leaf-back .leaf-shade");
+let leafTimer = null;
+let leafAnims = [];
+
+function reducedMotion() {
+  return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+function fillLeafFace(container, pageIndex) {
+  container.innerHTML = "";
+  const clone = flipTrack.cloneNode(true);
+  clone.removeAttribute("id");
+  clone.style.transition = "none";
+  clone.style.transform = `translateX(${-pageIndex * flipState.colStride}px)`;
+  container.appendChild(clone);
+}
+function endLeaf() {
+  clearTimeout(leafTimer);
+  leafTimer = null;
+  leafAnims.forEach((a) => { try { a.cancel(); } catch (e) {} });
+  leafAnims = [];
+  flipLeaf.classList.remove("animating");
+  leafFrontInner.innerHTML = "";
+  leafBackInner.innerHTML = "";
+}
+function runPageTurn(dir, frontPage, backPage) {
+  if (leafTimer) endLeaf();
+  const winRect = flipWindow.getBoundingClientRect();
+  const stageRect = flipStage.getBoundingClientRect();
+  const x = (winRect.left - stageRect.left) + flipWindow.clientLeft + (flipState.pagesPerView - 1) * flipState.pageW;
+  const y = (winRect.top - stageRect.top) + flipWindow.clientTop;
+
+  flipLeaf.style.left = x + "px";
+  flipLeaf.style.top = y + "px";
+  flipLeaf.style.width = flipState.pageW + "px";
+  flipLeaf.style.height = flipState.pageH + "px";
+  fillLeafFace(leafFrontInner, frontPage);
+  // In spread mode the leaf lands exactly on the facing page, so its back shows
+  // that page's text. In single-page mode it swings out past the book's edge, so
+  // the back stays blank paper - a page turning over, not text floating offscreen.
+  if (flipState.pagesPerView === 2) fillLeafFace(leafBackInner, backPage);
+  else leafBackInner.innerHTML = "";
+
+  const startDeg = dir > 0 ? 0 : -180;
+  const endDeg = dir > 0 ? -180 : 0;
+  flipLeaf.classList.add("animating");
+
+  // Web Animations API rather than CSS transitions: no start/reflow staging to get
+  // wrong, and it still resolves correctly if the tab is backgrounded mid-turn.
+  const ease = "cubic-bezier(.42,.02,.28,1)";
+  const opts = { duration: FLIP_MS, easing: ease, fill: "forwards" };
+  leafAnims = [
+    flipLeaf.animate([{ transform: `rotateY(${startDeg}deg)` }, { transform: `rotateY(${endDeg}deg)` }], opts),
+    leafFrontShade.animate([{ opacity: dir > 0 ? 0 : 0.5 }, { opacity: dir > 0 ? 0.5 : 0 }], opts),
+    leafBackShade.animate([{ opacity: dir > 0 ? 0.5 : 0 }, { opacity: dir > 0 ? 0 : 0.5 }], opts),
+  ];
+  leafAnims[0].finished.then(endLeaf).catch(() => {});
+  leafTimer = setTimeout(endLeaf, FLIP_MS + 120);
+}
 function nextFlipPage() {
-  if (flipState.currentSpread < flipState.totalSpreads - 1) { goToFlipSpread(flipState.currentSpread + 1); return; }
+  if (flipState.currentSpread < flipState.totalSpreads - 1) {
+    const to = flipState.currentSpread + 1;
+    if (reducedMotion()) { goToFlipSpread(to); return; }
+    const ppv = flipState.pagesPerView;
+    const frontPage = flipState.currentSpread * ppv + (ppv - 1);
+    runPageTurn(1, frontPage, frontPage + 1);
+    goToFlipSpread(to, true);
+    return;
+  }
   goRelative(1);
 }
 function prevFlipPage() {
-  if (flipState.currentSpread > 0) { goToFlipSpread(flipState.currentSpread - 1); return; }
+  if (flipState.currentSpread > 0) {
+    const to = flipState.currentSpread - 1;
+    if (reducedMotion()) { goToFlipSpread(to); return; }
+    const ppv = flipState.pagesPerView;
+    const frontPage = to * ppv + (ppv - 1);
+    runPageTurn(-1, frontPage, frontPage + 1);
+    goToFlipSpread(to, true);
+    return;
+  }
   goRelative(-1, true);
 }
 flipZoneNext.addEventListener("click", nextFlipPage);

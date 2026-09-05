@@ -302,6 +302,31 @@ article.chapter-body p:first-of-type::first-letter{
 @media (max-width:820px){
   .flip-page-pad{ padding:26px 22px; }
 }
+/* the turning page */
+/* Kept in the layout at all times (visibility, not display) so the browser has a
+   "before" style to transition from - toggling display would skip the animation. */
+#flipLeaf{
+  position:absolute; z-index:6; visibility:hidden;
+  transform-style:preserve-3d; transform-origin:left center;
+  will-change:transform; pointer-events:none;
+  width:1px; height:1px; top:0; left:0;
+}
+#flipLeaf.animating{ visibility:visible; }
+.leaf-face{
+  position:absolute; inset:0; overflow:hidden;
+  background:var(--surface);
+  backface-visibility:hidden; -webkit-backface-visibility:hidden;
+}
+.leaf-back{ transform:rotateY(180deg); }
+.leaf-inner{ position:absolute; inset:0; overflow:hidden; }
+.leaf-shade{
+  position:absolute; inset:0; opacity:0; pointer-events:none;
+  background:linear-gradient(90deg, rgba(0,0,0,.55), rgba(0,0,0,.12) 40%, rgba(0,0,0,0));
+}
+.leaf-back .leaf-shade{
+  background:linear-gradient(270deg, rgba(0,0,0,.55), rgba(0,0,0,.12) 40%, rgba(0,0,0,0));
+}
+
 .flip-zone{
   position:absolute; top:0; bottom:0; width:32%; background:transparent; border:none; cursor:pointer; z-index:5;
 }
