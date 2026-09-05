@@ -210,6 +210,44 @@ function nextSeq(bookId) {
   chapters.forEach((c) => { if ((c.bookId || null) === key && c.seq > max) max = c.seq; });
   return max + 1;
 }
+/* Chapter numbers embedded in titles ("Chapter 28: ...", "28. ...") drive
+   ordering, so volumes imported out of order still land in reading order. */
+function chapterNumberOf(title) {
+  let m = String(title).match(/chapter\s*[-_ ]?\s*(\d+)/i);
+  if (m) return parseInt(m[1], 10);
+  m = String(title).match(/^\s*(?:ch\.?\s*)?(\d+)\s*(?:[.:)\]-]|$)/i);
+  if (m) return parseInt(m[1], 10);
+  return null;
+}
+/* Re-sequences one book: by volume when every chapter knows its volume,
+   otherwise by the chapter number parsed from the title. Ties keep their
+   existing relative order, so nothing is shuffled arbitrarily. */
+function sortBookChapters(bookId) {
+  const items = chapters.filter((c) => c.bookId === bookId);
+  if (items.length < 2) return Promise.resolve(0);
+  const everyHasVol = items.every((c) => typeof c.vol === "number");
+  const decorated = items.map((c, i) => ({
+    c,
+    vol: everyHasVol ? c.vol : 0,
+    num: chapterNumberOf(c.title),
+    i,
+  }));
+  const anyNum = decorated.some((d) => d.num != null);
+  decorated.sort((a, b) => {
+    if (a.vol !== b.vol) return a.vol - b.vol;
+    if (anyNum) {
+      const an = a.num == null ? Infinity : a.num;
+      const bn = b.num == null ? Infinity : b.num;
+      if (an !== bn) return an - bn;
+    }
+    return a.i - b.i;
+  });
+  let changed = 0;
+  decorated.forEach((d, idx) => { if (d.c.seq !== idx) { d.c.seq = idx; changed++; } });
+  if (!changed) return Promise.resolve(0);
+  return putBookAndChapters(null, decorated.map((d) => d.c), []).then(() => changed);
+}
+
 function groupChapters() {
   const groups = [];
   books.forEach((b) => {
@@ -472,14 +510,18 @@ function layoutFlip(keepSpread, landAt) {
   if (rect.width < 10) return;
   const sidePad = isMobile() ? 16 : 44;
   const availW = rect.width - sidePad * 2;
-  const pagesPerView = availW >= 900 ? 2 : 1;
-  // No column gap: pages sit flush so the spine pivot for the page-turn lands
-  // exactly on the page edge. The visual spine gap comes from .flip-page-pad
-  // padding plus the #flipSpine shadow.
+  const pagesPerView = availW >= 820 ? 2 : 1;
+  // Pages sit flush (no gutter between page boxes) so the turn pivot lands
+  // exactly on the spine. The visual spine gap comes from the page margins.
   const gutter = 0;
-  let pageW = pagesPerView === 2 ? Math.floor(Math.min(availW, 1360) / 2) : Math.min(availW, 720);
+  let pageW = pagesPerView === 2 ? Math.floor(Math.min(availW, 1500) / 2) : Math.min(availW, 720);
   pageW = Math.max(240, pageW);
   const pageH = rect.height - 44;
+  // Per-page margins come from the column gap, not from padding on the flowed
+  // content: box-decoration-break:clone is not honoured for multicol fragments
+  // in Chrome, so padding there only lands on the first and last page.
+  const padX = isMobile() ? 22 : 34;
+  const padY = isMobile() ? 26 : 36;
 
   const prevSpreadPct = flipState.totalSpreads > 1 ? flipState.currentSpread / (flipState.totalSpreads - 1) : 0;
 
@@ -493,11 +535,14 @@ function layoutFlip(keepSpread, landAt) {
   flipWindow.style.width = (pagesPerView * pageW) + "px";
   flipWindow.style.height = pageH + "px";
   flipSpine.style.display = pagesPerView === 2 ? "block" : "none";
-  flipTrack.style.columnWidth = pageW + "px";
-  flipTrack.style.columnGap = gutter + "px";
+  // column box = page minus its two margins; the gap supplies one margin to the
+  // page on each side of it, so every page gets even margins, not just the first.
+  flipTrack.style.columnWidth = Math.max(80, pageW - padX * 2) + "px";
+  flipTrack.style.columnGap = (padX * 2) + "px";
+  flipTrack.style.padding = padY + "px " + padX + "px";
   flipTrack.style.height = pageH + "px";
 
-  flipState.totalPages = Math.max(1, Math.round((flipTrack.scrollWidth + gutter) / flipState.colStride));
+  flipState.totalPages = Math.max(1, Math.round(flipTrack.scrollWidth / flipState.colStride));
   flipState.totalSpreads = Math.max(1, Math.ceil(flipState.totalPages / pagesPerView));
 
   let target;
@@ -675,6 +720,7 @@ function renderLibrary() {
     const statusText = prog.total === 0 ? "No chapters" : prog.readCount === 0 ? `${prog.total} chapters &middot; not started` : `Chapter ${prog.readCount} of ${prog.total} &middot; ${prog.pct}% read`;
     html += `<div class="book-card" data-book-id="${esc(book.id)}" tabindex="0" role="button" aria-label="Open ${esc(book.title)}">` +
       `<span class="book-card-actions">` +
+        `<button class="mini-btn" data-action="sort" data-book-id="${esc(book.id)}" title="Sort chapters into reading order"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M4 12h7M4 18h4"/><path d="M17 5v14"/><path d="M14 16l3 3 3-3"/></svg></button>` +
         `<button class="mini-btn" data-action="rename" data-book-id="${esc(book.id)}" title="Rename"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>` +
         `<button class="mini-btn" data-action="delete" data-book-id="${esc(book.id)}" title="Delete this shelf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>` +
       `</span>` +
@@ -699,6 +745,15 @@ libraryGrid.addEventListener("click", (e) => {
     e.stopPropagation();
     const bookId = actionBtn.dataset.bookId;
     const action = actionBtn.dataset.action;
+    if (action === "sort") {
+      sortBookChapters(bookId).then((changed) => {
+        renderLibrary(); renderSidebar();
+        const cur = chapters.find((c) => c.id === currentId);
+        if (cur && cur.bookId === bookId) refreshHeadIfCurrent(currentId);
+        showToast(changed ? `Reordered ${changed.toLocaleString()} chapters into reading order.` : "Already in reading order.");
+      });
+      return;
+    }
     if (action === "rename") {
       const book = books.find((b) => b.id === bookId);
       const val = prompt("Rename shelf", book ? book.title : "");
@@ -1257,10 +1312,14 @@ function importOneGroup(grp) {
     const metaArr = [], textArr = [];
     let count = 0;
     grp.members.forEach((mem) => {
+      // Remembered so volumes imported in separate sessions still order correctly.
+      const vol = guessVolumeNumber(mem.fileName);
       mem.items.forEach((it) => {
         if (!it.include) return;
         const id = uid("c");
-        metaArr.push({ id, bookId: book.id, title: it.title, words: it.words, seq: seq++, addedAt: Date.now(), scrollPct: 0, pagePct: 0 });
+        const meta = { id, bookId: book.id, title: it.title, words: it.words, seq: seq++, addedAt: Date.now(), scrollPct: 0, pagePct: 0 };
+        if (vol != null) meta.vol = vol;
+        metaArr.push(meta);
         textArr.push({ id, text: it.text });
         count++;
       });
@@ -1269,7 +1328,8 @@ function importOneGroup(grp) {
     return putBookAndChapters(null, metaArr, textArr).then(() => {
       metaArr.forEach((m) => chapters.push(m));
       lastBookTitle = title;
-      return `Imported ${count.toLocaleString()} chapters into "${title}".`;
+      return sortBookChapters(book.id).then(() =>
+        `Imported ${count.toLocaleString()} chapters into "${title}".`);
     });
   });
 }

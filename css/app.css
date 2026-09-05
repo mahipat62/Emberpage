@@ -14,7 +14,7 @@
   --content-w:66ch;
   --reading-size:19px;
   --reading-leading:1.75;
-  --sidebar-w:272px;
+  --sidebar-w:310px;
   --ease:cubic-bezier(.4,0,.2,1);
 }
 :root[data-reader-theme="sepia"]{
@@ -135,11 +135,15 @@ a{ color:var(--accent); }
   content:""; position:absolute; left:0; top:8px; bottom:8px; width:3px;
   border-radius:3px; background:var(--accent);
 }
-.chapter-num{ font-family:var(--font-ui); font-weight:700; font-size:11px; color:var(--text-faint); font-variant-numeric:tabular-nums; width:26px; flex:none; }
+.chapter-num{ font-family:var(--font-ui); font-weight:700; font-size:11px; color:var(--text-faint); font-variant-numeric:tabular-nums; width:30px; flex:none; align-self:flex-start; padding-top:2px; }
 .chapter-row.active .chapter-num{ color:var(--accent); }
 .chapter-info{ flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
-.chapter-title{ display:block; font-size:13.5px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.chapter-meta{ display:block; font-size:11px; color:var(--text-faint); font-variant-numeric:tabular-nums; }
+.chapter-title{
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  font-size:13.5px; font-weight:600; color:var(--text); line-height:1.3;
+  overflow:hidden; overflow-wrap:anywhere;
+}
+.chapter-meta{ display:block; font-size:11px; color:var(--text-faint); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .chapter-actions{ display:flex; gap:2px; opacity:0; transition:opacity .15s var(--ease); flex:none; }
 .chapter-row:hover .chapter-actions, .chapter-row:focus-within .chapter-actions{ opacity:1; }
 .mini-btn{
@@ -273,7 +277,10 @@ article.chapter-body p:first-of-type::first-letter{
 }
 #flipWindow{
   position:relative; overflow:hidden; border-radius:8px;
-  background:var(--surface); border:1px solid var(--border-soft);
+  background:var(--surface);
+  /* outline, not border: a border would shrink the track and make the page
+     translation stride drift by 2px per page. */
+  outline:1px solid var(--border-soft); outline-offset:-1px;
   box-shadow:0 24px 60px var(--shadow), 0 2px 8px var(--shadow);
   transition:box-shadow .3s var(--ease);
 }
@@ -284,24 +291,19 @@ article.chapter-body p:first-of-type::first-letter{
   opacity:.35; pointer-events:none; z-index:3; display:none;
 }
 #flipTrack{
+  column-fill:auto;
   will-change:transform;
   transition:transform .42s cubic-bezier(.4,0,.2,1);
   transform-style:preserve-3d;
   font-family:var(--font-current); color:var(--text);
 }
-.flip-page-pad{
-  display:block;
-  -webkit-box-decoration-break:clone;
-  box-decoration-break:clone;
-  padding:36px 34px;
-}
+/* Page margins are supplied by the column gap in layoutFlip(), not here -
+   box-decoration-break is unreliable across multicol fragments. */
+.flip-page-pad{ display:block; }
 #flipTrack p{ margin:0 0 1.3em; font-size:var(--reading-size); line-height:var(--reading-leading); }
 #flipTrack .flip-chap-head{ margin:0 0 1.4em; break-after:avoid; }
 #flipTrack .flip-chap-head .chapter-eyebrow{ margin-bottom:8px; }
 #flipTrack .flip-chap-head h1{ font-size:clamp(22px,3vw,30px); margin:0; }
-@media (max-width:820px){
-  .flip-page-pad{ padding:26px 22px; }
-}
 /* the turning page */
 /* Kept in the layout at all times (visibility, not display) so the browser has a
    "before" style to transition from - toggling display would skip the animation. */
