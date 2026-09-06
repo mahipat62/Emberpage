@@ -1334,8 +1334,109 @@ function importOneGroup(grp) {
   });
 }
 
+/* ---------------- full-screen chapter index ---------------- */
+const chapterIndexBtn = document.getElementById("chapterIndexBtn");
+const indexOverlay = document.getElementById("indexOverlay");
+const indexBookTitle = document.getElementById("indexBookTitle");
+const indexCount = document.getElementById("indexCount");
+const indexSearch = document.getElementById("indexSearch");
+const indexJumpCurrent = document.getElementById("indexJumpCurrent");
+const indexClose = document.getElementById("indexClose");
+const indexGrid = document.getElementById("indexGrid");
+let indexBookId = null;
+
+function indexBookFor() {
+  const cur = chapters.find((c) => c.id === currentId);
+  if (cur) return cur.bookId || null;
+  const firstBook = books.find((b) => chapters.some((c) => c.bookId === b.id));
+  return firstBook ? firstBook.id : null;
+}
+function openChapterIndex() {
+  indexBookId = indexBookFor();
+  const book = books.find((b) => b.id === indexBookId);
+  indexBookTitle.textContent = book ? book.title : "Loose chapters";
+  indexSearch.value = "";
+  indexOverlay.hidden = false;
+  renderIndexList("");
+  setTimeout(() => {
+    const cur = indexGrid.querySelector(".index-item.current");
+    if (cur) cur.scrollIntoView({ block: "center" });
+  }, 20);
+}
+function closeChapterIndex() { indexOverlay.hidden = true; }
+
+function renderIndexList(filter) {
+  const key = indexBookId || null;
+  const items = chapters
+    .filter((c) => (c.bookId || null) === key)
+    .sort((a, z) => a.seq - z.seq);
+  const q = (filter || "").trim().toLowerCase();
+  const matched = q
+    ? items.filter((c, i) => {
+        if (String(i + 1) === q) return true;
+        if (c.title.toLowerCase().indexOf(q) !== -1) return true;
+        const n = chapterNumberOf(c.title);
+        return n != null && String(n) === q;
+      })
+    : items;
+
+  indexCount.textContent = q
+    ? `${matched.length.toLocaleString()} of ${items.length.toLocaleString()} chapters`
+    : `${items.length.toLocaleString()} chapters`;
+
+  if (!matched.length) {
+    indexGrid.innerHTML = '<div class="index-empty">Nothing matches that search.</div>';
+    return;
+  }
+
+  // Volume headings only when every chapter knows its volume and there is
+  // more than one - older imports predate volume tracking.
+  const vols = matched.map((c) => c.vol);
+  const showVols = !q && vols.every((v) => typeof v === "number") && new Set(vols).size > 1;
+
+  let html = "";
+  let lastVol = null;
+  matched.forEach((c) => {
+    const pos = items.indexOf(c) + 1;
+    if (showVols && c.vol !== lastVol) {
+      html += `<div class="index-vol-head">Volume ${c.vol}</div>`;
+      lastVol = c.vol;
+    }
+    html += `<button class="index-item${c.id === currentId ? " current" : ""}" type="button" data-id="${c.id}">` +
+      `<span class="index-item-num">${pos}</span>` +
+      `<span class="index-item-body">` +
+        `<span class="index-item-title">${esc(c.title)}</span>` +
+        `<span class="index-item-meta">${c.words.toLocaleString()} words &middot; ${readMinutes(c.words)} min</span>` +
+      `</span>` +
+    `</button>`;
+  });
+  indexGrid.innerHTML = html;
+}
+
+chapterIndexBtn.addEventListener("click", openChapterIndex);
+indexClose.addEventListener("click", closeChapterIndex);
+indexOverlay.addEventListener("click", (e) => { if (e.target === indexOverlay) closeChapterIndex(); });
+indexSearch.addEventListener("input", () => renderIndexList(indexSearch.value));
+indexJumpCurrent.addEventListener("click", () => {
+  indexSearch.value = "";
+  renderIndexList("");
+  const cur = indexGrid.querySelector(".index-item.current");
+  if (cur) cur.scrollIntoView({ block: "center", behavior: "smooth" });
+});
+indexGrid.addEventListener("click", (e) => {
+  const btn = e.target.closest(".index-item");
+  if (!btn) return;
+  closeChapterIndex();
+  openChapter(btn.dataset.id);
+});
+
 /* ---------------- keyboard shortcuts ---------------- */
 document.addEventListener("keydown", (e) => {
+  if (!indexOverlay.hidden) {
+    if (e.key === "Escape") closeChapterIndex();
+    else if (e.key === "/" && document.activeElement !== indexSearch) { e.preventDefault(); indexSearch.focus(); }
+    return;
+  }
   if (!modalOverlay.hidden) { if (e.key === "Escape") closeModal(); return; }
   if (!epubOverlay.hidden) { if (e.key === "Escape") closeEpubModal(); return; }
   const tag = (e.target.tagName || "").toLowerCase();
