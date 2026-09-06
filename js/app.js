@@ -5,6 +5,10 @@
    small synchronous UI settings), reading UI, and EPUB import.
    ========================================================================= */
 
+/* Keep in step with APP_VERSION in sw.js - that constant names the cache, so
+   bumping both is what actually pushes a new build out to installed devices. */
+const APP_VERSION = "1.3.0";
+
 /* ---------------- IndexedDB ---------------- */
 const DB_NAME = "emberpage-db";
 const DB_VERSION = 1;
@@ -1474,6 +1478,76 @@ openDB()
     renderEmptyMain();
   });
 
+/* ---------------- version + update ---------------- */
+const appVersionEl = document.getElementById("appVersion");
+const updateBtn = document.getElementById("updateBtn");
+let swRegistration = null;
+let updateReady = false;
+
+function setVersionLabel(extra) {
+  appVersionEl.textContent = "v" + APP_VERSION + (extra ? " " + extra : "");
+  appVersionEl.classList.toggle("update-ready", !!updateReady);
+}
+setVersionLabel();
+
+function markUpdateReady() {
+  updateReady = true;
+  updateBtn.textContent = "Update now";
+  updateBtn.classList.add("update-ready");
+  setVersionLabel("(update ready)");
+}
+
+/* Reloads onto the new build. Only the asset cache is cleared - books,
+   progress and settings live in IndexedDB/localStorage and are untouched. */
+function applyUpdate() {
+  const waiting = swRegistration && swRegistration.waiting;
+  if (waiting) {
+    navigator.serviceWorker.addEventListener("controllerchange", () => location.reload(), { once: true });
+    waiting.postMessage({ type: "SKIP_WAITING" });
+    setTimeout(() => location.reload(), 1500);
+    return;
+  }
+  // No worker waiting: drop the caches and reload to pull everything fresh.
+  const done = () => location.reload();
+  if (window.caches && caches.keys) {
+    caches.keys()
+      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+      .then(done)
+      .catch(done);
+  } else done();
+}
+
+updateBtn.addEventListener("click", () => {
+  if (updateReady) { showToast("Updating\u2026"); applyUpdate(); return; }
+  updateBtn.textContent = "Checking\u2026";
+  const finish = (msg) => { updateBtn.textContent = "Check for updates"; if (msg) showToast(msg); };
+  if (!swRegistration) { showToast("Reloading for the latest version\u2026"); applyUpdate(); return; }
+  swRegistration.update()
+    .then(() => {
+      setTimeout(() => {
+        if (swRegistration.waiting || swRegistration.installing) { markUpdateReady(); finish("New version found - tap Update now."); }
+        else finish("You are on the latest version.");
+      }, 900);
+    })
+    .catch(() => finish("Could not check - you may be offline."));
+});
+
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
+  window.addEventListener("load", () => {
+    // updateViaCache:none so the browser never serves a stale sw.js.
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+      .then((reg) => {
+        swRegistration = reg;
+        if (reg.waiting && navigator.serviceWorker.controller) markUpdateReady();
+        reg.addEventListener("updatefound", () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener("statechange", () => {
+            if (nw.state === "installed" && navigator.serviceWorker.controller) markUpdateReady();
+          });
+        });
+        reg.update().catch(() => {});
+      })
+      .catch(() => {});
+  });
 }

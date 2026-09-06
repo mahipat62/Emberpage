@@ -1,4 +1,6 @@
-const CACHE = "emberpage-v2";
+// Bump APP_VERSION in js/app.js to match whenever this changes.
+const APP_VERSION = "1.3.0";
+const CACHE = "emberpage-v" + APP_VERSION;
 const ASSETS = [
   "./",
   "./index.html",
@@ -26,6 +28,14 @@ const ASSETS = [
   "./icons/favicon-32.png",
 ];
 
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+  if (data.type === "SKIP_WAITING") self.skipWaiting();
+  if (data.type === "VERSION" && event.ports && event.ports[0]) {
+    event.ports[0].postMessage({ version: APP_VERSION });
+  }
+});
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE)
@@ -45,6 +55,20 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+
+  // Navigations: network first, so a fresh index.html arrives whenever online.
+  if (req.mode === "navigate") {
+    event.respondWith(
+      fetch(req)
+        .then((resp) => {
+          const copy = resp.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+          return resp;
+        })
+        .catch(() => caches.match(req).then((c) => c || caches.match("./index.html")))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(req).then((cached) => {

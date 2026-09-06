@@ -511,3 +511,10 @@ article.chapter-body p:first-of-type::first-letter{
   #indexPanel{ width:100%; height:100%; border-radius:0; border:none; padding:16px 14px 12px; }
   .index-grid{ grid-template-columns:1fr; }
 }
+
+/* ---------- version / update ---------- */
+.sidebar-foot{ display:flex; flex-direction:column; gap:4px; }
+.foot-version{ display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; }
+#appVersion{ font-variant-numeric:tabular-nums; }
+.foot-version .link-btn{ font-size:10.5px; padding:0; }
+.update-ready{ color:var(--accent); font-weight:700; }
