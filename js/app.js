@@ -7,7 +7,7 @@
 
 /* Keep in step with APP_VERSION in sw.js - that constant names the cache, so
    bumping both is what actually pushes a new build out to installed devices. */
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.5.0";
 
 /* ---------------- IndexedDB ---------------- */
 const DB_NAME = "emberpage-db";
@@ -101,7 +101,7 @@ function saveJSON(key, val) {
 }
 
 const defaultSettings = {
-  theme: null, font: "serif", size: 19, leading: 1.75, width: 66,
+  theme: null, font: "literata", size: 19, leading: 1.75, width: 66,
   sidebarOpen: true, focus: false, collapsedBooks: [], readMode: "scroll", dockOpen: false,
 };
 let settings = Object.assign({}, defaultSettings, loadJSON(LS_SETTINGS, {}));
@@ -137,7 +137,11 @@ const nextBtn = document.getElementById("nextBtn");
 const focusBtn = document.getElementById("focusBtn");
 const modeBtn = document.getElementById("modeBtn");
 const sizeVal = document.getElementById("sizeVal");
-const themeGroup = document.getElementById("themeGroup");
+const settingsBtn = document.getElementById("settingsBtn");
+const settingsOverlay = document.getElementById("settingsOverlay");
+const settingsClose = document.getElementById("settingsClose");
+const themeChoices = document.getElementById("themeChoices");
+const fontChoices = document.getElementById("fontChoices");
 
 const modalOverlay = document.getElementById("modalOverlay");
 const modalCard = document.getElementById("modalCard");
@@ -283,37 +287,93 @@ function updateStorageMeter() {
 }
 
 /* ---------------- theme & typography ---------------- */
+const THEMES = [
+  { id: "paper",       label: "Paper",           note: "Bright rooms, daylight",     bg: "#EDEEF1", dot: "#C2721F" },
+  { id: "solar-light", label: "Solarized Light", note: "Even contrast, long reads",  bg: "#FDF6E3", dot: "#B07000" },
+  { id: "sepia",       label: "Sepia",           note: "Warm paper, low glare",      bg: "#E9D8B3", dot: "#AD531B" },
+  { id: "dusk",        label: "Dusk",            note: "Soft dark, evening",         bg: "#17151C", dot: "#DD9350" },
+  { id: "nord",        label: "Nord",            note: "Cool dark, low glare",       bg: "#2E3440", dot: "#D9926A" },
+  { id: "solar-dark",  label: "Solarized Dark",  note: "Even contrast, night",       bg: "#002B36", dot: "#CB9A16" },
+  { id: "midnight",    label: "Midnight",        note: "True black, best on OLED",   bg: "#000000", dot: "#E2934C" },
+];
+
+/* Faces chosen for long-form screen reading: large x-heights and real italics.
+   Atkinson Hyperlegible and Lexend are here for legibility reasons, not variety. */
+const READING_FONTS = [
+  { id: "literata",     label: "Literata",              note: "Designed for Google Play Books",        stack: "'Literata',Georgia,Cambria,serif" },
+  { id: "merriweather", label: "Merriweather",          note: "Drawn for screens, large x-height",      stack: "'Merriweather',Georgia,serif" },
+  { id: "lora",         label: "Lora",                  note: "Warm serif, good for narrative",         stack: "'Lora',Georgia,serif" },
+  { id: "ptserif",      label: "PT Serif",              note: "Transitional book serif",                stack: "'PT Serif',Georgia,serif" },
+  { id: "atkinson",     label: "Atkinson Hyperlegible", note: "Braille Institute; letters stay distinct", stack: "'Atkinson Hyperlegible',system-ui,sans-serif" },
+  { id: "lexend",       label: "Lexend",                note: "Wider spacing, tuned for reading speed", stack: "'Lexend',system-ui,sans-serif" },
+  { id: "manrope",      label: "Manrope",               note: "Clean geometric sans",                   stack: "'Manrope',system-ui,sans-serif" },
+];
+
+// Older settings stored only "serif"/"sans".
+if (settings.font === "serif") settings.font = "literata";
+else if (settings.font === "sans") settings.font = "manrope";
+function currentFont() {
+  return READING_FONTS.find((f) => f.id === settings.font) || READING_FONTS[0];
+}
+
 function applyTheme() {
   document.documentElement.setAttribute("data-reader-theme", settings.theme);
-  themeGroup.querySelectorAll(".swatch").forEach((b) => b.classList.toggle("on", b.dataset.theme === settings.theme));
-  document.querySelector('meta[name="theme-color"]').setAttribute("content",
-    getComputedStyle(document.documentElement).getPropertyValue("--surface").trim() || "#0A0A0C");
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", getComputedStyle(document.documentElement).getPropertyValue("--surface").trim() || "#0A0A0C");
+  themeChoices.querySelectorAll(".theme-card").forEach((b) => b.classList.toggle("on", b.dataset.theme === settings.theme));
 }
-themeGroup.addEventListener("click", (e) => {
-  const b = e.target.closest(".swatch");
+function applyTypography() {
+  const f = currentFont();
+  document.documentElement.style.setProperty("--reading-size", settings.size + "px");
+  document.documentElement.style.setProperty("--reading-leading", settings.leading);
+  document.documentElement.style.setProperty("--content-w", settings.width + "ch");
+  document.documentElement.style.setProperty("--font-current", f.stack);
+  sizeVal.textContent = settings.size;
+  fontChoices.querySelectorAll(".font-card").forEach((b) => b.classList.toggle("on", b.dataset.font === settings.font));
+  if (settings.readMode === "flip") layoutFlip(true);
+}
+
+function renderSettingsSheet() {
+  themeChoices.innerHTML = THEMES.map((t) =>
+    `<button class="theme-card" type="button" data-theme="${t.id}">` +
+      `<span class="theme-dot" style="background:${t.bg};"><span style="background:${t.dot};"></span></span>` +
+      `<span class="theme-card-text">` +
+        `<span class="theme-card-name">${esc(t.label)}</span>` +
+        `<span class="theme-card-note">${esc(t.note)}</span>` +
+      `</span>` +
+    `</button>`).join("");
+  fontChoices.innerHTML = READING_FONTS.map((f) =>
+    `<button class="font-card" type="button" data-font="${f.id}">` +
+      `<span class="font-card-main">` +
+        `<span class="font-card-name" style="font-family:${f.stack};">${esc(f.label)}</span>` +
+        `<span class="font-card-note">${esc(f.note)}</span>` +
+      `</span>` +
+      `<span class="font-card-sample" style="font-family:${f.stack};">Aa Rg</span>` +
+    `</button>`).join("");
+  applyTheme();
+  applyTypography();
+}
+renderSettingsSheet();
+
+themeChoices.addEventListener("click", (e) => {
+  const b = e.target.closest(".theme-card");
   if (!b) return;
   settings.theme = b.dataset.theme;
   applyTheme();
   saveJSON(LS_SETTINGS, settings);
 });
-function applyTypography() {
-  document.documentElement.style.setProperty("--reading-size", settings.size + "px");
-  document.documentElement.style.setProperty("--reading-leading", settings.leading);
-  document.documentElement.style.setProperty("--content-w", settings.width + "ch");
-  document.documentElement.style.setProperty("--font-current", settings.font === "serif" ? "var(--font-body)" : "var(--font-body-alt)");
-  sizeVal.textContent = settings.size;
-  document.getElementById("fontSerifBtn").classList.toggle("on", settings.font === "serif");
-  document.getElementById("fontSansBtn").classList.toggle("on", settings.font === "sans");
-  if (settings.readMode === "flip") layoutFlip(true);
-}
-document.getElementById("fontSerifBtn").addEventListener("click", () => { settings.font = "serif"; applyTypography(); saveJSON(LS_SETTINGS, settings); });
-document.getElementById("fontSansBtn").addEventListener("click", () => { settings.font = "sans"; applyTypography(); saveJSON(LS_SETTINGS, settings); });
-document.getElementById("sizeMinus").addEventListener("click", () => { settings.size = Math.max(15, settings.size - 1); applyTypography(); saveJSON(LS_SETTINGS, settings); });
-document.getElementById("sizePlus").addEventListener("click", () => { settings.size = Math.min(26, settings.size + 1); applyTypography(); saveJSON(LS_SETTINGS, settings); });
-document.getElementById("leadMinus").addEventListener("click", () => { settings.leading = Math.max(1.4, +(settings.leading - 0.1).toFixed(2)); applyTypography(); saveJSON(LS_SETTINGS, settings); });
-document.getElementById("leadPlus").addEventListener("click", () => { settings.leading = Math.min(2.2, +(settings.leading + 0.1).toFixed(2)); applyTypography(); saveJSON(LS_SETTINGS, settings); });
-document.getElementById("widthMinus").addEventListener("click", () => { settings.width = Math.max(52, settings.width - 4); applyTypography(); saveJSON(LS_SETTINGS, settings); });
-document.getElementById("widthPlus").addEventListener("click", () => { settings.width = Math.min(84, settings.width + 4); applyTypography(); saveJSON(LS_SETTINGS, settings); });
+fontChoices.addEventListener("click", (e) => {
+  const b = e.target.closest(".font-card");
+  if (!b) return;
+  settings.font = b.dataset.font;
+  applyTypography();
+  saveJSON(LS_SETTINGS, settings);
+});
+function openSettings() { settingsOverlay.hidden = false; }
+function closeSettings() { settingsOverlay.hidden = true; }
+settingsBtn.addEventListener("click", (e) => { e.stopPropagation(); openSettings(); });
+settingsClose.addEventListener("click", closeSettings);
+settingsOverlay.addEventListener("click", (e) => { if (e.target === settingsOverlay) closeSettings(); });
 
 /* ---------------- sidebar open/close & focus mode ---------------- */
 function isMobile() { return window.innerWidth <= 820; }
@@ -1436,6 +1496,7 @@ indexGrid.addEventListener("click", (e) => {
 
 /* ---------------- keyboard shortcuts ---------------- */
 document.addEventListener("keydown", (e) => {
+  if (!settingsOverlay.hidden) { if (e.key === "Escape") closeSettings(); return; }
   if (!indexOverlay.hidden) {
     if (e.key === "Escape") closeChapterIndex();
     else if (e.key === "/" && document.activeElement !== indexSearch) { e.preventDefault(); indexSearch.focus(); }

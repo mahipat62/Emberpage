@@ -103,16 +103,8 @@
       </button>
     </div>
     <div class="dock-sep"></div>
-    <div class="dock-group" id="themeGroup">
-      <button class="swatch" data-theme="paper" title="Paper (light)" aria-label="Paper theme" style="background:#EDEEF1;"><span style="width:9px;height:9px;border-radius:50%;background:#C2721F;"></span></button>
-      <button class="swatch" data-theme="sepia" title="Sepia (reading)" aria-label="Sepia theme" style="background:#E9D8B3;"><span style="width:9px;height:9px;border-radius:50%;background:#AD531B;"></span></button>
-      <button class="swatch" data-theme="dusk" title="Dusk (soft dark)" aria-label="Dusk theme" style="background:#201E27;"><span style="width:9px;height:9px;border-radius:50%;background:#DD9350;"></span></button>
-      <button class="swatch" data-theme="midnight" title="Midnight (true black)" aria-label="Midnight theme" style="background:#000;"><span style="width:9px;height:9px;border-radius:50%;background:#E2934C;"></span></button>
-    </div>
-    <div class="dock-sep"></div>
     <div class="dock-group">
-      <button class="dock-btn letters" id="fontSerifBtn" type="button" title="Serif reading font" aria-label="Serif font">Aa</button>
-      <button class="dock-btn letters alt" id="fontSansBtn" type="button" title="Sans reading font" aria-label="Sans font">Aa</button>
+      <button class="dock-btn letters" id="settingsBtn" type="button" title="Reading settings - themes and fonts" aria-label="Reading settings">Aa</button>
     </div>
     <div class="dock-sep"></div>
     <div class="dock-group">
@@ -204,6 +196,28 @@
       <button id="indexJumpCurrent" class="btn ghost" type="button">Current</button>
     </div>
     <div id="indexGrid" class="index-grid"></div>
+  </div>
+</div>
+
+
+<div id="settingsOverlay" hidden>
+  <div id="settingsSheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="settings-head">
+      <h2 id="settingsTitle">Reading settings</h2>
+      <button id="settingsClose" class="icon-btn" type="button" aria-label="Close settings" title="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="settings-body">
+      <section class="settings-section">
+        <h3>Theme</h3>
+        <div id="themeChoices" class="theme-choices"></div>
+      </section>
+      <section class="settings-section">
+        <h3>Reading font</h3>
+        <div id="fontChoices" class="font-choices"></div>
+      </section>
+    </div>
   </div>
 </div>
 
