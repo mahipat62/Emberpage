@@ -7,7 +7,7 @@
 
 /* Keep in step with APP_VERSION in sw.js - that constant names the cache, so
    bumping both is what actually pushes a new build out to installed devices. */
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.5.2";
 
 /* ---------------- IndexedDB ---------------- */
 const DB_NAME = "emberpage-db";
@@ -142,6 +142,9 @@ const settingsOverlay = document.getElementById("settingsOverlay");
 const settingsClose = document.getElementById("settingsClose");
 const themeChoices = document.getElementById("themeChoices");
 const fontChoices = document.getElementById("fontChoices");
+const setSizeVal = document.getElementById("setSizeVal");
+const setLeadVal = document.getElementById("setLeadVal");
+const setWidthVal = document.getElementById("setWidthVal");
 
 const modalOverlay = document.getElementById("modalOverlay");
 const modalCard = document.getElementById("modalCard");
@@ -329,6 +332,9 @@ function applyTypography() {
   document.documentElement.style.setProperty("--content-w", settings.width + "ch");
   document.documentElement.style.setProperty("--font-current", f.stack);
   sizeVal.textContent = settings.size;
+  if (setSizeVal) setSizeVal.textContent = settings.size;
+  if (setLeadVal) setLeadVal.textContent = settings.leading.toFixed(2);
+  if (setWidthVal) setWidthVal.textContent = settings.width;
   fontChoices.querySelectorAll(".font-card").forEach((b) => b.classList.toggle("on", b.dataset.font === settings.font));
   if (settings.readMode === "flip") layoutFlip(true);
 }
@@ -369,6 +375,30 @@ fontChoices.addEventListener("click", (e) => {
   applyTypography();
   saveJSON(LS_SETTINGS, settings);
 });
+/* Size / spacing / width. These listeners were lost when theme and font
+   selection moved into the settings sheet, leaving the dock buttons inert. */
+function stepSetting(kind) {
+  if (kind === "size-") settings.size = Math.max(15, settings.size - 1);
+  else if (kind === "size+") settings.size = Math.min(26, settings.size + 1);
+  else if (kind === "lead-") settings.leading = Math.max(1.4, +(settings.leading - 0.1).toFixed(2));
+  else if (kind === "lead+") settings.leading = Math.min(2.2, +(settings.leading + 0.1).toFixed(2));
+  else if (kind === "width-") settings.width = Math.max(52, settings.width - 4);
+  else if (kind === "width+") settings.width = Math.min(84, settings.width + 4);
+  else return;
+  applyTypography();
+  saveJSON(LS_SETTINGS, settings);
+}
+document.getElementById("sizeMinus").addEventListener("click", () => stepSetting("size-"));
+document.getElementById("sizePlus").addEventListener("click", () => stepSetting("size+"));
+document.getElementById("leadMinus").addEventListener("click", () => stepSetting("lead-"));
+document.getElementById("leadPlus").addEventListener("click", () => stepSetting("lead+"));
+document.getElementById("widthMinus").addEventListener("click", () => stepSetting("width-"));
+document.getElementById("widthPlus").addEventListener("click", () => stepSetting("width+"));
+document.querySelector(".set-rows").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-step]");
+  if (b) stepSetting(b.dataset.step);
+});
+
 function openSettings() { settingsOverlay.hidden = false; }
 function closeSettings() { settingsOverlay.hidden = true; }
 settingsBtn.addEventListener("click", (e) => { e.stopPropagation(); openSettings(); });

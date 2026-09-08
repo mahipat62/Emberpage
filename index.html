@@ -217,6 +217,35 @@
         <h3>Reading font</h3>
         <div id="fontChoices" class="font-choices"></div>
       </section>
+      <section class="settings-section">
+        <h3>Text</h3>
+        <div class="set-rows">
+          <div class="set-row">
+            <span class="set-row-label">Font size</span>
+            <div class="set-stepper">
+              <button class="dock-btn" data-step="size-" type="button" aria-label="Smaller text">&minus;</button>
+              <span class="stepper-val" id="setSizeVal">19</span>
+              <button class="dock-btn" data-step="size+" type="button" aria-label="Larger text">+</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <span class="set-row-label">Line spacing</span>
+            <div class="set-stepper">
+              <button class="dock-btn" data-step="lead-" type="button" aria-label="Tighter line spacing">&minus;</button>
+              <span class="stepper-val" id="setLeadVal">1.75</span>
+              <button class="dock-btn" data-step="lead+" type="button" aria-label="Looser line spacing">+</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <span class="set-row-label">Column width</span>
+            <div class="set-stepper">
+              <button class="dock-btn" data-step="width-" type="button" aria-label="Narrower column">&minus;</button>
+              <span class="stepper-val" id="setWidthVal">66</span>
+              <button class="dock-btn" data-step="width+" type="button" aria-label="Wider column">+</button>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </div>

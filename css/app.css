@@ -618,3 +618,17 @@ article.chapter-body p:first-of-type::first-letter{
   #settingsOverlay{ padding:0; align-items:flex-end; }
   #settingsSheet{ max-height:92vh; border-radius:var(--radius-l) var(--radius-l) 0 0; }
 }
+
+/* settings sheet: name and note are separate lines, not run together */
+.theme-card-text, .font-card-main{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.theme-card-name, .font-card-name{ display:block; }
+.theme-card-note, .font-card-note{ display:block; }
+.set-rows{ display:flex; flex-direction:column; gap:8px; }
+.set-row{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:8px 12px; border-radius:var(--radius-s);
+  border:1px solid var(--border); background:var(--surface-2);
+}
+.set-row-label{ font-family:var(--font-ui); font-size:13px; font-weight:600; color:var(--text); }
+.set-stepper{ display:flex; align-items:center; gap:4px; flex:none; }
+.set-stepper .dock-btn{ width:30px; height:30px; background:var(--surface); border:1px solid var(--border); }
