@@ -1,5 +1,5 @@
 // Bump APP_VERSION in js/app.js to match whenever this changes.
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.4.0";
 const CACHE = "emberpage-v" + APP_VERSION;
 const ASSETS = [
   "./",

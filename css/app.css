@@ -518,3 +518,22 @@ article.chapter-body p:first-of-type::first-letter{
 #appVersion{ font-variant-numeric:tabular-nums; }
 .foot-version .link-btn{ font-size:10.5px; padding:0; }
 .update-ready{ color:var(--accent); font-weight:700; }
+
+/* ---------- collapsible dock ---------- */
+#dockBall{
+  position:fixed; left:50%; bottom:20px; z-index:51;
+  width:46px; height:46px; border-radius:50%;
+  background:var(--surface); border:1px solid var(--border);
+  box-shadow:0 8px 24px var(--shadow); cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transform:translateX(-50%);
+  transition:opacity .22s var(--ease), transform .22s var(--ease);
+}
+#dockBall svg{ width:20px; height:20px; stroke:var(--text-dim); }
+#dockBall:hover{ transform:translateX(-50%) translateY(-2px); }
+#app.dock-open #dockBall{ opacity:0; pointer-events:none; transform:translateX(-50%) scale(.5); }
+#app:not(.dock-open) #dock{
+  opacity:0; pointer-events:none; transform:translate(-50%,10px) scale(.94);
+}
+#app.focus-mode #dockBall{ opacity:0; pointer-events:none; }
+#app.focus-mode #dockBall.wake{ opacity:1; pointer-events:auto; }

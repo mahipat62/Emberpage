@@ -7,7 +7,7 @@
 
 /* Keep in step with APP_VERSION in sw.js - that constant names the cache, so
    bumping both is what actually pushes a new build out to installed devices. */
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.4.0";
 
 /* ---------------- IndexedDB ---------------- */
 const DB_NAME = "emberpage-db";
@@ -102,7 +102,7 @@ function saveJSON(key, val) {
 
 const defaultSettings = {
   theme: null, font: "serif", size: 19, leading: 1.75, width: 66,
-  sidebarOpen: true, focus: false, collapsedBooks: [], readMode: "scroll",
+  sidebarOpen: true, focus: false, collapsedBooks: [], readMode: "scroll", dockOpen: false,
 };
 let settings = Object.assign({}, defaultSettings, loadJSON(LS_SETTINGS, {}));
 if (!Array.isArray(settings.collapsedBooks)) settings.collapsedBooks = [];
@@ -337,11 +337,11 @@ readerScroll.addEventListener("click", (e) => { if (settings.focus && e.target =
 let dockIdleTimer;
 function wakeDock() {
   dock.classList.remove("dimmed");
-  if (app.classList.contains("focus-mode")) dock.classList.add("wake");
+  if (app.classList.contains("focus-mode")) { dock.classList.add("wake"); dockBall.classList.add("wake"); }
   clearTimeout(dockIdleTimer);
   dockIdleTimer = setTimeout(() => {
     dock.classList.add("dimmed");
-    if (app.classList.contains("focus-mode")) dock.classList.remove("wake");
+    if (app.classList.contains("focus-mode")) { dock.classList.remove("wake"); dockBall.classList.remove("wake"); }
   }, 2600);
 }
 dock.addEventListener("mouseenter", () => { clearTimeout(dockIdleTimer); dock.classList.remove("dimmed"); });
@@ -395,7 +395,7 @@ function renderSidebar() {
     if (!collapsed) {
       grp.items.forEach((c, i) => {
         const active = c.id === currentId;
-        html += `<div class="chapter-row${active ? " active" : ""}" data-id="${c.id}" tabindex="0" role="button" aria-label="Open ${esc(c.title)}">` +
+        html += `<div class="chapter-row${active ? " active" : ""}" data-id="${c.id}" tabindex="${active ? 0 : -1}" role="button" aria-label="Open ${esc(c.title)}">` +
           `<span class="chapter-num">${i + 1}</span>` +
           `<span class="chapter-info"><span class="chapter-title">${esc(c.title)}</span>` +
             `<span class="chapter-meta">${c.words} words &middot; ${readMinutes(c.words)} min</span></span>` +
@@ -445,8 +445,8 @@ function renderScrollChapter(ch, text) {
     "</div>" +
     `<article class="chapter-body">${paragraphsHtml(text)}</article>` +
     '<div class="chapter-foot">' +
-      `<button class="btn ghost" id="footPrev" type="button"${idx <= 0 ? " disabled" : ""}>&larr; Previous</button>` +
-      `<button class="btn ghost" id="footNext" type="button"${idx >= sibs.length - 1 ? " disabled" : ""}>Next &rarr;</button>` +
+      `<button class="btn ghost" id="footPrev" type="button" tabindex="-1"${idx <= 0 ? " disabled" : ""}>&larr; Previous</button>` +
+      `<button class="btn ghost" id="footNext" type="button" tabindex="-1"${idx >= sibs.length - 1 ? " disabled" : ""}>Next &rarr;</button>` +
     "</div>";
   const fp = document.getElementById("footPrev"), fn = document.getElementById("footNext");
   if (fp) fp.addEventListener("click", () => goRelative(-1));
@@ -1449,7 +1449,7 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowLeft") { settings.readMode === "flip" ? prevFlipPage() : goRelative(-1); }
   else if (e.key.toLowerCase() === "f") { toggleFocus(); wakeDock(); }
   else if (e.key.toLowerCase() === "n") openModal("add");
-  else if (e.key === "Escape" && settings.focus) toggleFocus();
+  else if (e.key === "Escape") { if (settings.dockOpen) setDockOpen(false); else if (settings.focus) toggleFocus(); }
 });
 window.addEventListener("mousemove", () => { if (app.classList.contains("focus-mode")) wakeDock(); });
 
@@ -1477,6 +1477,28 @@ openDB()
     chapterList.innerHTML = '<div class="sidebar-empty"><p>Local storage isn\'t available in this browser, so your library can\'t be saved here.</p></div>';
     renderEmptyMain();
   });
+
+/* ---------------- collapsible dock ---------------- */
+const dockBall = document.getElementById("dockBall");
+function applyDockState() {
+  app.classList.toggle("dock-open", !!settings.dockOpen);
+  dockBall.setAttribute("aria-expanded", settings.dockOpen ? "true" : "false");
+}
+function setDockOpen(open) {
+  settings.dockOpen = !!open;
+  applyDockState();
+  saveJSON(LS_SETTINGS, settings);
+  if (settings.dockOpen) wakeDock();
+}
+dockBall.addEventListener("click", (e) => { e.stopPropagation(); setDockOpen(true); });
+// Tapping away from the dock puts it back to the ball.
+document.addEventListener("click", (e) => {
+  if (!settings.dockOpen) return;
+  if (e.target.closest("#dock") || e.target.closest("#dockBall")) return;
+  if (e.target.closest("#modalOverlay, #epubOverlay, #indexOverlay")) return;
+  setDockOpen(false);
+});
+applyDockState();
 
 /* ---------------- version + update ---------------- */
 const appVersionEl = document.getElementById("appVersion");
